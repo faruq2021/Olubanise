@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: olubanise-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: olubanise
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./schema:/docker-entrypoint-initdb.d
+    networks:
+      - olubanise-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  orchestrator:
+    build:
+      context: ./src/orchestrator/Olubanise.Orchestrator
+      dockerfile: Dockerfile
+    container_name: olubanise-orchestrator
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=db;Database=olubanise;Username=postgres;Password=password
+      - ANTHROPIC__APIKEY=sk-ant-placeholder
+      - WORKER__SHAREDSECRET=change_this_to_a_secure_random_string
+      - ASPNETCORE_URLS=http://+:8080
+    ports:
+      - "5241:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - olubanise-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/weatherforecast"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build:
+      context: ./src/worker
+      dockerfile: Dockerfile
+    container_name: olubanise-worker
+    environment:
+      - ORCHESTRATOR_URL=http://orchestrator:8080
+      - WORKER_SECRET=change_this_to_a_secure_random_string
+      - ENCRYPTION_KEY=01234567890123456789012345678901
+    depends_on:
+      orchestrator:
+         condition: service_healthy
+    networks:
+      - olubanise-net
+
+networks:
+  olubanise-net:
+    driver: bridge
+
+volumes:
+  db-data:

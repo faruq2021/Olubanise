@@ -1,0 +1,46 @@
+services:
+  # The .NET Orchestrator
+  - type: web
+    name: olubanise-orchestrator
+    runtime: docker
+    dockerContext: src/orchestrator/Olubanise.Orchestrator
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: ConnectionStrings__DefaultConnection
+        fromDatabase:
+          name: olubanise-db
+          property: connectionString
+      - key: ANTHROPIC__APIKEY
+        sync: false
+      - key: WORKER__SHAREDSECRET
+        generateValue: true
+      - key: ASPNETCORE_URLS
+        value: http://+:8080
+    healthCheckPath: /weatherforecast
+
+  # The Node.js Worker
+  - type: worker
+    name: olubanise-worker
+    runtime: docker
+    dockerContext: src/worker
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: ORCHESTRATOR_URL
+        fromService:
+          type: web
+          name: olubanise-orchestrator
+          property: url
+      - key: WORKER_SECRET
+        fromService:
+          type: web
+          name: olubanise-orchestrator
+          envVarKey: WORKER__SHAREDSECRET
+      - key: ENCRYPTION_KEY
+        sync: false
+
+databases:
+  - name: olubanise-db
+    databaseName: olubanise
+    user: olubanise_user
+    plan: free
+
