@@ -209,7 +209,7 @@ function App() {
                 <div className="card-header">
                   <div className="card-title">Permission Toggles</div>
                 </div>
-                <div className="setting-row">
+                <div className="setting-row" style={{ marginBottom: 24 }}>
                   <div className="setting-info">
                     <div className="setting-label">Require Approval for Deletion</div>
                     <div className="setting-desc">Agent must ask via WhatsApp before deleting files.</div>
