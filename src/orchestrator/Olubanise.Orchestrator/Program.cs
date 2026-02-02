@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
 using Olubanise.Orchestrator.Data;
 using Olubanise.Orchestrator.Services;
+using Olubanise.Orchestrator.Hubs;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,6 +21,33 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Custom Services
 builder.Services.AddScoped<IEncryptionService, EncryptionService>();
 
+// SignalR
+builder.Services.AddSignalR();
+
+// Rate Limiting
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("fixed", opt =>
+    {
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.PermitLimit = 10;
+        opt.QueueLimit = 2;
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+    });
+});
+
+// CORS for React Frontend
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173", "https://olubanise.work") // Local Vite and Production
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -29,8 +59,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors("AllowFrontend");
+
+app.UseRateLimiter();
+
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<OlubaniseHub>("/hubs/olubanise");
 
 app.Run();

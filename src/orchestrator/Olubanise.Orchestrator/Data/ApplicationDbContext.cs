@@ -67,6 +67,8 @@ public class WhatsAppSession
     
     [MaxLength(50)]
     public string Status { get; set; } = "disconnected";
+
+    public string SystemPrompt { get; set; } = "You are Olubanise, a helpful AI personal assistant. Be concise and professional.";
     
     public DateTime LastSyncedAt { get; set; } = DateTime.UtcNow;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

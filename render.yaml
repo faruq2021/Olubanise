@@ -16,7 +16,9 @@ services:
         generateValue: true
       - key: ASPNETCORE_URLS
         value: http://+:8080
-    healthCheckPath: /weatherforecast
+      - key: ANTHROPIC__BYPASSBILLING
+        value: "false"
+    healthCheckPath: /api/sessions/health
 
   # The Node.js Worker
   - type: worker
@@ -37,6 +39,19 @@ services:
           envVarKey: WORKER__SHAREDSECRET
       - key: ENCRYPTION_KEY
         sync: false
+
+  # The React Frontend
+  - type: web
+    name: olubanise-web
+    runtime: docker
+    dockerContext: src/web
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: VITE_API_BASE
+        fromService:
+          type: web
+          name: olubanise-orchestrator
+          property: url
 
 databases:
   - name: olubanise-db

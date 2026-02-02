@@ -3,6 +3,7 @@ import { useMemoryAuth } from './RemoteAuth.js';
 import pino from 'pino';
 import axios from 'axios';
 import { Boom } from '@hapi/boom';
+import QRCode from 'qrcode';
 
 const logger = pino({ level: 'info' });
 
@@ -38,16 +39,27 @@ export class WorkerManager {
         sock.ev.on('creds.update', saveCreds);
 
         // 4. Handle Connection Updates
-        sock.ev.on('connection.update', (update: Partial<any>) => {
+        sock.ev.on('connection.update', async (update: Partial<any>) => {
             const { connection, lastDisconnect, qr } = update;
 
             if (qr) {
-                logger.info(`[${userId}] QR Code received. Scan to login.`);
+                logger.info(`[${userId}] QR Code received.`);
+                const qrImageUrl = await QRCode.toDataURL(qr);
+                const base64Data = qrImageUrl.replace(/^data:image\/png;base64,/, "");
+
+                await axios.post(`${ORCHESTRATOR_URL}/api/sessions/${userId}/status`, {
+                    status: 'connecting',
+                    qr: base64Data
+                }, { headers: { 'X-Worker-Secret': WORKER_SECRET } });
             }
 
             if (connection === 'close') {
                 const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
                 logger.warn(`[${userId}] Connection closed. Reconnecting: ${shouldReconnect}`);
+
+                await axios.post(`${ORCHESTRATOR_URL}/api/sessions/${userId}/status`, {
+                    status: shouldReconnect ? 'reconnecting' : 'disconnected'
+                }, { headers: { 'X-Worker-Secret': WORKER_SECRET } });
 
                 // Clean up map
                 this.sessions.delete(userId);
@@ -58,6 +70,9 @@ export class WorkerManager {
             } else if (connection === 'open') {
                 logger.info(`[${userId}] Connection opened!`);
                 this.sessions.set(userId, sock);
+                await axios.post(`${ORCHESTRATOR_URL}/api/sessions/${userId}/status`, {
+                    status: 'connected'
+                }, { headers: { 'X-Worker-Secret': WORKER_SECRET } });
             }
         });
 

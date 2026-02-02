@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS WhatsAppSessions (
     session_blob TEXT, -- The serialized/encrypted authentication data
     encryption_iv VARCHAR(255), -- To ensure AES-256 encryption is unique per user
     status VARCHAR(50) DEFAULT 'disconnected', -- disconnected, connecting, connected, error
+    system_prompt TEXT DEFAULT 'You are Olubanise, a helpful AI personal assistant. Be concise and professional.',
     last_synced_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

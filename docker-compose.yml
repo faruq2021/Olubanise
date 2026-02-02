@@ -8,11 +8,11 @@ services:
       POSTGRES_DB: olubanise
     volumes:
       - db-data:/var/lib/postgresql/data
-      - ./schema:/docker-entrypoint-initdb.d
+      - ./schema:/docker-entrypoint-initdb.d:ro
     networks:
       - olubanise-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,8 +24,9 @@ services:
     container_name: olubanise-orchestrator
     environment:
       - ConnectionStrings__DefaultConnection=Host=db;Database=olubanise;Username=postgres;Password=password
-      - ANTHROPIC__APIKEY=sk-ant-placeholder
-      - WORKER__SHAREDSECRET=change_this_to_a_secure_random_string
+      - ANTHROPIC__APIKEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC__BYPASSBILLING=${BYPASS_BILLING:-false}
+      - WORKER__SHAREDSECRET=${WORKER_SHARED_SECRET}
       - ASPNETCORE_URLS=http://+:8080
     ports:
       - "5241:8080"
@@ -35,7 +36,7 @@ services:
     networks:
       - olubanise-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/weatherforecast"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/api/sessions/health" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -47,11 +48,24 @@ services:
     container_name: olubanise-worker
     environment:
       - ORCHESTRATOR_URL=http://orchestrator:8080
-      - WORKER_SECRET=change_this_to_a_secure_random_string
-      - ENCRYPTION_KEY=01234567890123456789012345678901
+      - WORKER_SECRET=${WORKER_SHARED_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
     depends_on:
       orchestrator:
-         condition: service_healthy
+        condition: service_healthy
+    networks:
+      - olubanise-net
+
+  web:
+    build:
+      context: ./src/web
+      dockerfile: Dockerfile
+    container_name: olubanise-web
+    ports:
+      - "5173:80"
+    depends_on:
+      orchestrator:
+        condition: service_healthy
     networks:
       - olubanise-net
 

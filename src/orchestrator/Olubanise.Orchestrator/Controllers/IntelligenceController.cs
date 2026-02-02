@@ -1,13 +1,13 @@
 using Anthropic.SDK;
 using Anthropic.SDK.Messaging;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
 using Olubanise.Orchestrator.Data;
 
 namespace Olubanise.Orchestrator.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting("fixed")]
 public class IntelligenceController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -40,11 +40,17 @@ public class IntelligenceController : ControllerBase
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.UserId);
         if (user == null) return NotFound("User not found");
 
+        var bypassBilling = _configuration.GetValue<bool>("Anthropic:BypassBilling");
         var wallet = await _context.Wallets.FirstOrDefaultAsync(w => w.UserId == request.UserId);
-        if (wallet == null || wallet.Balance <= 0)
+        
+        if (!bypassBilling && (wallet == null || wallet.Balance <= 0))
         {
             return BadRequest("Insufficient credits");
         }
+
+        // 1.1 Fetch System Prompt
+        var session = await _context.WhatsAppSessions.FirstOrDefaultAsync(s => s.UserId == request.UserId);
+        var systemPrompt = session?.SystemPrompt ?? "You are Olubanise, a helpful AI personal assistant.";
 
         try
         {
@@ -58,18 +64,11 @@ public class IntelligenceController : ControllerBase
             {
                 Messages = messages,
                 Model = "claude-3-5-sonnet-20240620",
-                MaxTokens = 1024
+                MaxTokens = 1024,
+                System = systemPrompt
             };
 
-            // var response = await _anthropicClient.Messages.GetAsync(parameters);
-            
-            // TODO: Verify exact method name for Anthropic.SDK v4.3.1 (e.g. CreateAsync, GetAsync)
-            // Mocking response to verify Token Accounting logic during scaffolding
-            var response = new 
-            { 
-                Content = new [] { new { Text = "This is a mock response from the Intelligence Proxy." } }, 
-                Usage = new { InputTokens = 15, OutputTokens = 40 } 
-            };
+            var response = await _anthropicClient.Messages.GetClaudeMessageAsync(parameters);
 
             // 3. Token Accounting (Guardrail 1: Capture usage object directly)
             var inputTokens = response.Usage.InputTokens;
@@ -77,34 +76,37 @@ public class IntelligenceController : ControllerBase
             var totalCost = (inputTokens + outputTokens) * MarkupRate;
 
             // 4. Transactional Update
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            if (!bypassBilling && wallet != null)
             {
-                wallet.Balance -= totalCost;
-                wallet.UpdatedAt = DateTime.UtcNow;
-
-                var log = new TransactionLog
+                using var transaction = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    UserId = user.Id,
-                    WalletId = wallet.Id,
-                    Amount = -totalCost,
-                    TransactionType = "DEBIT",
-                    Description = $"Claude 3.5 - Prompt: {request.Prompt.Substring(0, Math.Min(request.Prompt.Length, 50))}..."
-                };
+                    wallet.Balance -= totalCost;
+                    wallet.UpdatedAt = DateTime.UtcNow;
 
-                _context.TransactionLogs.Add(log);
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
+                    var log = new TransactionLog
+                    {
+                        UserId = user.Id,
+                        WalletId = wallet.Id,
+                        Amount = -totalCost,
+                        TransactionType = "DEBIT",
+                        Description = $"Claude 3.5 - Prompt: {request.Prompt.Substring(0, Math.Min(request.Prompt.Length, 50))}..."
+                    };
+
+                    _context.TransactionLogs.Add(log);
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
             }
 
             return Ok(new
             {
-                Response = response.Content[0].Text,
+                Response = response.Message.ToString(),
                 Usage = new
                 {
                     InputTokens = inputTokens,
