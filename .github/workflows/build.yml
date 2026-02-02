@@ -1,0 +1,47 @@
+name: Olubanise Build Check
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-orchestrator:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 8.0.x
+    - name: Build Orchestrator
+      run: dotnet build src/orchestrator/Olubanise.Orchestrator/Olubanise.Orchestrator.csproj
+
+  build-worker:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 20
+    - name: Build Worker
+      run: |
+        cd src/worker
+        npm install
+        npm run build
+
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 20
+    - name: Build Web
+      run: |
+        cd src/web
+        npm install
+        npm run build
