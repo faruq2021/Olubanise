@@ -5,10 +5,13 @@ import {
   MonitorDot,
   Wallet,
   History,
+  Shield,
   Plus,
   CheckCircle2,
   FileText,
-  DollarSign
+  DollarSign,
+  Trash2,
+  Lock
 } from 'lucide-react';
 import axios from 'axios';
 import { SignalRService } from './services/SignalRService';
@@ -16,7 +19,7 @@ import { SignalRService } from './services/SignalRService';
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000000";
 const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5241") + "/api";
 
-type View = 'dashboard' | 'soul' | 'desktop' | 'wallet' | 'audit';
+type View = 'dashboard' | 'soul' | 'desktop' | 'wallet' | 'audit' | 'security';
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
@@ -26,6 +29,16 @@ function App() {
   const [showTopUp, setShowTopUp] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("You are Olubanise, a helpful AI personal assistant. Be concise and professional.");
   const [activePreset, setActivePreset] = useState("Executive Assistant");
+
+  // Security State
+  const [securitySettings, setSecuritySettings] = useState({
+    requireApprovalForDestructive: true,
+    restrictToWorkFolder: true,
+    workDirectory: "C:\\OlubaniseWork"
+  });
+  const [trustedSources, setTrustedSources] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [newTrustedSource, setNewTrustedSource] = useState("");
 
   useEffect(() => {
     const signalR = new SignalRService(TEST_USER_ID);
@@ -43,6 +56,60 @@ function App() {
     return () => signalR.disconnect();
   }, []);
 
+  // Fetch Security Data when view changes
+  useEffect(() => {
+    if (currentView === 'security') {
+      fetchSecurityData();
+    }
+  }, [currentView]);
+
+  const fetchSecurityData = async () => {
+    try {
+      const settingsRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/settings`);
+      setSecuritySettings(settingsRes.data);
+
+      const trustedRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/trusted`);
+      setTrustedSources(trustedRes.data);
+
+      const auditRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/audit`);
+      setAuditLogs(auditRes.data);
+    } catch (e) {
+      console.error("Error fetching security data", e);
+    }
+  };
+
+  const updateSettings = async (updates: any) => {
+    const newSettings = { ...securitySettings, ...updates };
+    setSecuritySettings(newSettings);
+    try {
+      await axios.post(`${API_BASE}/security/${TEST_USER_ID}/settings`, newSettings);
+    } catch (e) {
+      console.error("Error saving settings", e);
+    }
+  };
+
+  const addTrustedSource = async () => {
+    if (!newTrustedSource) return;
+    try {
+      const res = await axios.post(`${API_BASE}/security/${TEST_USER_ID}/trusted`, {
+        phoneNumber: newTrustedSource,
+        platform: 'WhatsApp'
+      });
+      setTrustedSources([res.data, ...trustedSources]);
+      setNewTrustedSource("");
+    } catch (e) {
+      console.error("Error adding trusted source", e);
+    }
+  };
+
+  const removeTrustedSource = async (id: string) => {
+    try {
+      await axios.delete(`${API_BASE}/security/${TEST_USER_ID}/trusted/${id}`);
+      setTrustedSources(trustedSources.filter(s => s.id !== id));
+    } catch (e) {
+      console.error("Error removing trusted source", e);
+    }
+  };
 
   const updateSoul = async (newPrompt: string) => {
     try {
@@ -126,6 +193,120 @@ function App() {
                 </p>
                 <button className="primary-btn" onClick={() => setCurrentView('soul')}>Configure Soul</button>
               </div>
+            </div>
+          </div>
+        );
+
+      case 'security':
+        return (
+          <div className="section-container">
+            <header className="header">
+              <h1>Security & Deep Permissions</h1>
+              <p className="last-sync">Manage how your Agent interacts with sensitive data.</p>
+            </header>
+            <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">Permission Toggles</div>
+                </div>
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <div className="setting-label">Require Approval for Deletion</div>
+                    <div className="setting-desc">Agent must ask via WhatsApp before deleting files.</div>
+                  </div>
+                  <Toggle
+                    active={securitySettings.requireApprovalForDestructive}
+                    onToggle={() => updateSettings({ requireApprovalForDestructive: !securitySettings.requireApprovalForDestructive })}
+                  />
+                </div>
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <div className="setting-label">Restrict to Work Folder</div>
+                    <div className="setting-desc">Agent can only access files in the specified directory.</div>
+                  </div>
+                  <Toggle
+                    active={securitySettings.restrictToWorkFolder}
+                    onToggle={() => updateSettings({ restrictToWorkFolder: !securitySettings.restrictToWorkFolder })}
+                  />
+                </div>
+                {securitySettings.restrictToWorkFolder && (
+                  <div className="input-group" style={{ marginTop: 16 }}>
+                    <label className="input-label">Work Directory Path</label>
+                    <input
+                      type="text"
+                      className="text-input"
+                      value={securitySettings.workDirectory}
+                      onChange={(e) => updateSettings({ workDirectory: e.target.value })}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title">Trusted Sources</div>
+                </div>
+                <p className="setting-desc" style={{ marginBottom: 16 }}>Only these verified numbers can trigger the agent.</p>
+
+                <div className="input-group" style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    className="text-input"
+                    placeholder="+234..."
+                    value={newTrustedSource}
+                    onChange={(e) => setNewTrustedSource(e.target.value)}
+                  />
+                  <button className="primary-btn" onClick={addTrustedSource} style={{ width: 'auto' }}>Add</button>
+                </div>
+
+                <div className="trusted-list">
+                  {trustedSources.map((s: any) => (
+                    <div key={s.id} className="trusted-item">
+                      <div className="trusted-info">
+                        <CheckCircle2 size={16} color="#4ade80" />
+                        <span>{s.phoneNumber}</span>
+                      </div>
+                      <button className="icon-btn" onClick={() => removeTrustedSource(s.id)}>
+                        <Trash2 size={16} color="#ef4444" />
+                      </button>
+                    </div>
+                  ))}
+                  {trustedSources.length === 0 && <div className="empty-state">No trusted sources added. Agent is open to all.</div>}
+                </div>
+              </div>
+            </div>
+
+            <div className="card" style={{ marginTop: 24 }}>
+              <div className="card-header">
+                <div className="card-title">Security Audit Log</div>
+              </div>
+              <table className="transaction-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Action</th>
+                    <th>Resource</th>
+                    <th>Status</th>
+                    <th>Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map((log: any) => (
+                    <tr key={log.id}>
+                      <td>{new Date(log.timestamp).toLocaleString()}</td>
+                      <td>{log.action}</td>
+                      <td>{log.resource}</td>
+                      <td>
+                        <span className={`type-badge ${log.status === 'Blocked' ? 'type-debit' : 'type-credit'}`}>
+                          {log.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td>{log.reason}</td>
+                    </tr>
+                  ))}
+                  {auditLogs.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 20 }}>No security events logged.</td></tr>}
+                </tbody>
+              </table>
             </div>
           </div>
         );
@@ -281,6 +462,7 @@ function App() {
         </div>
         <nav className="nav-links">
           <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />
+          <NavItem icon={<Shield size={20} />} label="Security" active={currentView === 'security'} onClick={() => setCurrentView('security')} />
           <NavItem icon={<BrainCircuit size={20} />} label="Agent Soul" active={currentView === 'soul'} onClick={() => setCurrentView('soul')} />
           <NavItem icon={<MonitorDot size={20} />} label="Desktop Link" active={currentView === 'desktop'} onClick={() => setCurrentView('desktop')} />
           <NavItem icon={<Wallet size={20} />} label="Wallet" active={currentView === 'wallet'} onClick={() => setCurrentView('wallet')} />
@@ -353,6 +535,35 @@ function ActivityItem({ icon, title, sub, status }: any) {
         <CheckCircle2 size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
         {status}
       </div>
+    </div>
+  );
+}
+
+function Toggle({ active, onToggle }: any) {
+  return (
+    <div
+      className={`toggle-switch ${active ? 'active' : ''}`}
+      onClick={onToggle}
+      style={{
+        width: 44,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: active ? '#4ade80' : '#334155',
+        position: 'relative',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s'
+      }}
+    >
+      <div style={{
+        width: 20,
+        height: 20,
+        borderRadius: '50%',
+        backgroundColor: 'white',
+        position: 'absolute',
+        top: 2,
+        left: active ? 22 : 2,
+        transition: 'left 0.2s'
+      }} />
     </div>
   );
 }

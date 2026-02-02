@@ -89,7 +89,8 @@ export class WorkerManager {
                     // Forward to .NET Orchestrator
                     const response = await axios.post(`${ORCHESTRATOR_URL}/api/intelligence/chat`, {
                         userId: userId,
-                        prompt: text
+                        prompt: text,
+                        sourceId: msg.key.remoteJid
                     }, {
                         headers: { 'X-Worker-Secret': WORKER_SECRET }
                     });

@@ -12,6 +12,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<Wallet> Wallets { get; set; }
     public DbSet<WhatsAppSession> WhatsAppSessions { get; set; }
     public DbSet<TransactionLog> TransactionLogs { get; set; }
+    public DbSet<SecuritySettings> SecuritySettings { get; set; }
+    public DbSet<TrustedSource> TrustedSources { get; set; }
+    public DbSet<SecurityAuditLog> SecurityAuditLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -72,6 +75,9 @@ public class WhatsAppSession
     
     public DateTime LastSyncedAt { get; set; } = DateTime.UtcNow;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    
+    public string? PendingCommand { get; set; }
+    public DateTime? PendingCommandTime { get; set; }
 }
 
 public class TransactionLog
@@ -94,4 +100,36 @@ public class TransactionLog
     public string? Description { get; set; }
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class SecuritySettings
+{
+    [Key]
+    public Guid UserId { get; set; }
+    public bool RequireApprovalForDestructive { get; set; } = true;
+    public bool RestrictToWorkFolder { get; set; } = true;
+    public string WorkDirectory { get; set; } = @"C:\OlubaniseWork";
+}
+
+public class TrustedSource
+{
+    [Key]
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public string? PhoneNumber { get; set; } // For WhatsApp JID
+    public string? Email { get; set; }
+    public string Platform { get; set; } = "WhatsApp"; // or "Email"
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class SecurityAuditLog
+{
+    [Key]
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public string Action { get; set; } // "File Delete", "Format"
+    public string Resource { get; set; } // "report.docx"
+    public string Status { get; set; } // "Allowed", "Blocked", "Pending"
+    public string Reason { get; set; } // "Destructive command blocked"
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }
