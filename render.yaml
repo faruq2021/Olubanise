@@ -31,7 +31,7 @@ services:
         fromService:
           type: web
           name: olubanise-orchestrator
-          property: url
+          property: host
       - key: WORKER_SECRET
         fromService:
           type: web
@@ -51,7 +51,7 @@ services:
         fromService:
           type: web
           name: olubanise-orchestrator
-          property: url
+          property: host
 
 databases:
   - name: olubanise-db
