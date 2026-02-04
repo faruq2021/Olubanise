@@ -24,10 +24,11 @@ function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [status, setStatus] = useState('disconnected');
   const [qr, setQr] = useState<string | null>(null);
-  const [balance] = useState(45230.25);
+  const [balance, setBalance] = useState(0);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [showTopUp, setShowTopUp] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState("You are Olubanise, a helpful AI personal assistant. Be concise and professional.");
-  const [activePreset, setActivePreset] = useState("Executive Assistant");
+  const [systemPrompt, setSystemPrompt] = useState("Olubanise is loading...");
+  const [activePreset, setActivePreset] = useState("Default");
 
   // Security State
   const [securitySettings, setSecuritySettings] = useState({
@@ -40,6 +41,9 @@ function App() {
   const [newTrustedSource, setNewTrustedSource] = useState("");
 
   useEffect(() => {
+    // Initial Data Fetch
+    fetchInitialData();
+
     const signalR = new SignalRService(TEST_USER_ID);
 
     signalR.onStatusUpdate((data) => {
@@ -55,12 +59,55 @@ function App() {
     return () => signalR.disconnect();
   }, []);
 
-  // Fetch Security Data when view changes
+  const fetchInitialData = async () => {
+    try {
+      // Fetch Wallet
+      const walletRes = await axios.get(`${API_BASE}/payments/${TEST_USER_ID}/wallet`);
+      setBalance(walletRes.data.balance);
+      setTransactions(walletRes.data.transactions);
+
+      // Fetch Security Settings
+      const settingsRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/settings`);
+      setSecuritySettings(settingsRes.data);
+
+      // Fetch Trusted Sources
+      const trustedRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/trusted`);
+      setTrustedSources(trustedRes.data);
+
+      // Fetch Audit Logs for Dashboard
+      const auditRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/audit`);
+      setAuditLogs(auditRes.data);
+
+      // Fetch Soul (System Prompt)
+      const soulRes = await axios.get(`${API_BASE}/sessions/${TEST_USER_ID}`);
+      // Since we don't have a direct GET soul endpoint yet, we infer from previous fetches or add one
+      // For now, assume it's part of the general settings or default
+      if (soulRes.data.systemPrompt) setSystemPrompt(soulRes.data.systemPrompt);
+    } catch (e) {
+      console.error("Error fetching initial data", e);
+    }
+  };
+
+  // Fetch data on view change
   useEffect(() => {
-    if (currentView === 'security') {
+    if (currentView === 'security' || currentView === 'dashboard') {
+      fetchSecurityData();
+    }
+    if (currentView === 'wallet') {
+      fetchWalletData();
+    }
+    if (currentView === 'audit') {
       fetchSecurityData();
     }
   }, [currentView]);
+
+  const fetchWalletData = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/payments/${TEST_USER_ID}/wallet`);
+      setBalance(res.data.balance);
+      setTransactions(res.data.transactions);
+    } catch (e) { console.error(e); }
+  };
 
   const fetchSecurityData = async () => {
     try {
@@ -137,7 +184,7 @@ function App() {
                   </button>
                 </div>
                 <div className="credits-amount">
-                  {balance.toLocaleString()}
+                  {balance.toFixed(2)}
                   <span className="credits-symbol">CR</span>
                 </div>
               </div>
@@ -148,9 +195,11 @@ function App() {
                 </div>
                 <div className="qr-container">
                   {qr ? (
-                    <img src={`data:image/png;base64,${qr}`} alt="QR Code" style={{ width: '100%' }} />
+                    <img src={`data:image/png;base64,${qr}`} alt="QR Code" style={{ width: '100%', borderRadius: 8 }} />
                   ) : (
-                    <div className="qr-placeholder"></div>
+                    <div className="qr-placeholder" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e293b', color: '#64748b', fontSize: '0.8rem' }}>
+                      {status === 'connected' ? 'Connected ✅' : 'Waiting for QR...'}
+                    </div>
                   )}
                 </div>
                 <div className={`connection-status ${status}`}>
@@ -161,21 +210,19 @@ function App() {
 
               <div className="card activity-card">
                 <div className="card-header">
-                  <div className="card-title">Recent Activity</div>
+                  <div className="card-title">Live Security Feed</div>
                 </div>
                 <div className="activity-list">
-                  <ActivityItem
-                    icon={<FileText size={18} color="#818cf8" />}
-                    title="Olubanise organized 5 files"
-                    sub="Local Desktop • 2 mins ago"
-                    status="Done"
-                  />
-                  <ActivityItem
-                    icon={<DollarSign size={18} color="#f472b6" />}
-                    title="Invoice #2024-09 generated"
-                    sub="QuickBooks Agent • 14 mins ago"
-                    status="Sent"
-                  />
+                  {auditLogs.slice(0, 3).map(log => (
+                    <ActivityItem
+                      key={log.id}
+                      icon={log.status === 'Blocked' ? <Shield size={18} color="#ef4444" /> : <CheckCircle2 size={18} color="#4ade80" />}
+                      title={log.action}
+                      sub={log.resource}
+                      status={log.status}
+                    />
+                  ))}
+                  {auditLogs.length === 0 && <div className="empty-state">No recent activity</div>}
                 </div>
               </div>
 
@@ -344,6 +391,7 @@ function App() {
                 <div className="card-title" style={{ marginTop: 24 }}>Custom Soul Prompt</div>
                 <textarea
                   className="textarea-input"
+                  style={{ minHeight: 150 }}
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   placeholder="Describe how your agent should behave..."
@@ -367,7 +415,7 @@ function App() {
               </p>
               <div className="pairing-code-box">
                 <div className="card-title">Your Pairing Code</div>
-                <div className="pairing-code">OLU-B3Z1</div>
+                <div className="pairing-code">OLU-{TEST_USER_ID.substring(0, 4).toUpperCase()}</div>
               </div>
               <p className="last-sync">Enter this code into the Olubanise Desktop App.</p>
             </div>
@@ -386,17 +434,16 @@ function App() {
                   <div className="card-title">Logic Credits Balance</div>
                 </div>
                 <div className="credits-amount">
-                  {balance.toLocaleString()}
+                  {balance.toFixed(2)}
                   <span className="credits-symbol">CR</span>
                 </div>
                 <button className="primary-btn" onClick={() => setShowTopUp(true)}>Buy Credits</button>
               </div>
               <div className="card">
                 <div className="card-title">Usage Statistics</div>
-                <p className="soul-description">Your agent uses approximately <b>14.2 CR</b> per message.</p>
+                <p className="soul-description">You have {transactions.length} recent transactions.</p>
                 <div style={{ marginTop: 20 }}>
-                  <div className="last-sync">Daily Average: 120 CR</div>
-                  <div className="last-sync">Estimated Expiry: 14 Days</div>
+                  <div className="last-sync">Daily Average: Calculated on use</div>
                 </div>
               </div>
             </div>
@@ -412,18 +459,15 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td>Feb 2, 2026</td>
-                    <td>Claude 3.5 Sonnet Usage</td>
-                    <td><span className="type-badge type-debit">DEBIT</span></td>
-                    <td>-18.40 CR</td>
-                  </tr>
-                  <tr>
-                    <td>Jan 30, 2026</td>
-                    <td>Wallet Top-up (Paystack)</td>
-                    <td><span className="type-badge type-credit">CREDIT</span></td>
-                    <td>+20,000.00 CR</td>
-                  </tr>
+                  {transactions.map((t: any) => (
+                    <tr key={t.id}>
+                      <td>{new Date(t.timestamp).toLocaleDateString()}</td>
+                      <td>{t.description}</td>
+                      <td><span className={`type-badge ${t.transactionType === 'DEBIT' ? 'type-debit' : 'type-credit'}`}>{t.transactionType}</span></td>
+                      <td>{t.amount.toFixed(2)} CR</td>
+                    </tr>
+                  ))}
+                  {transactions.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', padding: 20 }}>No transactions yet.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -438,9 +482,16 @@ function App() {
             </header>
             <div className="card">
               <div className="activity-list">
-                <ActivityItem icon={<History size={18} />} title="System Prompt Updated" sub="Today • 10:42 AM" status="Logged" />
-                <ActivityItem icon={<MonitorDot size={18} />} title="Desktop Agent Connected" sub="Feb 1 • 09:15 PM" status="Success" />
-                <ActivityItem icon={<CheckCircle2 size={18} />} title="WhatsApp Session Authenticated" sub="Jan 28 • 02:22 PM" status="Secure" />
+                {auditLogs.map(log => (
+                  <ActivityItem
+                    key={log.id}
+                    icon={<History size={18} />}
+                    title={log.action}
+                    sub={`${log.resource} - ${log.reason}`}
+                    status={log.status}
+                  />
+                ))}
+                {auditLogs.length === 0 && <div className="empty-state">No audit logs available.</div>}
               </div>
             </div>
           </div>
@@ -470,8 +521,8 @@ function App() {
         <div className="sidebar-footer">
           <div className="user-avatar"></div>
           <div className="user-info">
-            <div className="name">Simi Adebayo</div>
-            <div className="role">Admin</div>
+            <div className="name">Demo User</div>
+            <div className="role">Account Owner</div>
           </div>
         </div>
       </aside>
@@ -492,7 +543,7 @@ function App() {
             </div>
             <button className="primary-btn" onClick={() => {
               const val = (document.getElementById('amount-input') as HTMLInputElement).value;
-              alert(`Top up of ${val} NGN initiated!`);
+              alert(`Top up of ${val} NGN initiated! Payment Gateway redirected...`);
               setShowTopUp(false);
             }}>
               Proceed to Payment
