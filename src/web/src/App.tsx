@@ -10,8 +10,7 @@ import {
   CheckCircle2,
   FileText,
   DollarSign,
-  Trash2,
-  Lock
+  Trash2
 } from 'lucide-react';
 import axios from 'axios';
 import { SignalRService } from './services/SignalRService';
