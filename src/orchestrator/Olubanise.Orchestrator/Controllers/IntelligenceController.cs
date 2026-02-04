@@ -140,7 +140,7 @@ public class IntelligenceController : ControllerBase
                 Messages = messages,
                 Model = "claude-3-5-sonnet-20240620",
                 MaxTokens = 1024,
-                System = systemPrompt
+                System = new List<SystemMessage> { new SystemMessage(systemPrompt) }
             };
 
             var response = await _anthropicClient.Messages.GetClaudeMessageAsync(parameters);

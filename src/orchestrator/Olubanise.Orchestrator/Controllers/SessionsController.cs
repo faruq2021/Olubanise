@@ -70,7 +70,7 @@ public class SessionsController : ControllerBase
         await _context.SaveChangesAsync();
         
         // Notify frontend via SignalR
-        await _hubContext.Groups.SendAsync(userId.ToString(), "SessionUpdated", new { session.Status });
+        await _hubContext.Clients.Group(userId.ToString()).SendAsync("SessionUpdated", new { session.Status });
         
         return Ok();
     }
@@ -88,7 +88,7 @@ public class SessionsController : ControllerBase
         }
 
         // Broadcast to SignalR
-        await _hubContext.Groups.SendAsync(userId.ToString(), "StatusUpdate", new { request.Status, request.Qr });
+        await _hubContext.Clients.Group(userId.ToString()).SendAsync("StatusUpdate", new { request.Status, request.Qr });
 
         return Ok();
     }
