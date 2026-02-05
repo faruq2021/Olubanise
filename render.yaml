@@ -48,10 +48,7 @@ services:
     dockerfilePath: Dockerfile
     envVars:
       - key: VITE_API_BASE
-        fromService:
-          type: web
-          name: olubanise-orchestrator
-          property: host
+        value: https://olubanise-orchestrator.onrender.com
 
 databases:
   - name: olubanise-db
