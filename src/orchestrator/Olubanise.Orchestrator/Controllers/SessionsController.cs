@@ -29,11 +29,17 @@ public class SessionsController : ControllerBase
     {
         var workerSecret = _configuration["Worker:SharedSecret"];
         var hasSecret = !string.IsNullOrEmpty(workerSecret);
+        
+        var connectionString = _configuration.GetConnectionString("DefaultConnection");
+        var hasConnectionString = !string.IsNullOrEmpty(connectionString);
+        
         return Ok(new { 
             hasWorkerSecret = hasSecret,
             secretLength = workerSecret?.Length ?? 0,
-            // Don't expose the actual secret, just first/last chars for verification
-            secretPreview = hasSecret ? $"{workerSecret[0]}...{workerSecret[^1]}" : "NOT_SET"
+            secretPreview = hasSecret ? $"{workerSecret[0]}...{workerSecret[^1]}" : "NOT_SET",
+            hasConnectionString = hasConnectionString,
+            connectionStringLength = connectionString?.Length ?? 0,
+            connectionStringPreview = hasConnectionString ? $"{connectionString.Substring(0, Math.Min(15, connectionString.Length))}..." : "NOT_SET"
         });
     }
 
