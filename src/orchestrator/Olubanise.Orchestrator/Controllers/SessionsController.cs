@@ -88,14 +88,35 @@ public class SessionsController : ControllerBase
         if (!IsWorkerAuthorized()) return Unauthorized();
 
         var session = await _context.WhatsAppSessions.FindAsync(userId);
-        if (session != null)
+        if (session == null)
+        {
+            // Create session if it doesn't exist
+            session = new WhatsAppSession 
+            { 
+                UserId = userId,
+                Status = request.Status,
+                CreatedAt = DateTime.UtcNow,
+                LastSyncedAt = DateTime.UtcNow
+            };
+            _context.WhatsAppSessions.Add(session);
+        }
+        else
         {
             session.Status = request.Status;
-            await _context.SaveChangesAsync();
         }
 
-        // Broadcast to SignalR
-        await _hubContext.Clients.Group(userId.ToString()).SendAsync("StatusUpdate", new { request.Status, request.Qr });
+        await _context.SaveChangesAsync();
+
+        // Broadcast to SignalR (wrapped in try-catch to prevent 500 errors)
+        try
+        {
+            await _hubContext.Clients.Group(userId.ToString()).SendAsync("StatusUpdate", new { request.Status, request.Qr });
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail the request
+            Console.WriteLine($"SignalR broadcast failed: {ex.Message}");
+        }
 
         return Ok();
     }
