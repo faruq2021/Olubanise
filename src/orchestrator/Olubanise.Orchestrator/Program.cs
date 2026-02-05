@@ -14,9 +14,25 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Database Context
+// Database Context - Support both explicit connection string and Render's DATABASE_URL
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+                      ?? builder.Configuration["DATABASE_URL"]
+                      ?? Environment.GetEnvironmentVariable("DATABASE_URL");
+
+if (string.IsNullOrEmpty(connectionString))
+{
+    Console.WriteLine("WARNING: No database connection string found!");
+    Console.WriteLine("Checked: ConnectionStrings:DefaultConnection, DATABASE_URL environment variable");
+    // Use a dummy connection string to prevent startup crash - will fail on first DB access
+    connectionString = "Host=localhost;Database=olubanise;Username=postgres;Password=password";
+}
+else
+{
+    Console.WriteLine($"Database connection string found (length: {connectionString.Length})");
+}
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(connectionString));
 
 // Custom Services
 builder.Services.AddScoped<IEncryptionService, EncryptionService>();
