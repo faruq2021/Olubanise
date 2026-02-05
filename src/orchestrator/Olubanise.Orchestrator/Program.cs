@@ -41,6 +41,14 @@ builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =
     }
     else
     {
+        // Render's DATABASE_URL uses "postgres://" but Npgsql requires "postgresql://"
+        if (connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) && 
+            !connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            connectionString = "postgresql://" + connectionString.Substring("postgres://".Length);
+            Console.WriteLine($"[DbContext] Converted postgres:// to postgresql://");
+        }
+        
         Console.WriteLine($"[DbContext] SUCCESS: Using connection string (length: {connectionString.Length}, preview: {connectionString.Substring(0, Math.Min(20, connectionString.Length))}...)");
     }
     
