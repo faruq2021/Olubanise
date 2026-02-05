@@ -14,28 +14,40 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+Console.WriteLine("=== CONFIGURING DATABASE ===");
+
 // Database Context - Support both explicit connection string and Render's DATABASE_URL
 // Use a factory to ensure connection string is retrieved fresh each time
 builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
 {
+    Console.WriteLine("[DbContext Factory] Creating DbContext...");
+    
     var configuration = serviceProvider.GetRequiredService<IConfiguration>();
     
-    var connectionString = configuration.GetConnectionString("DefaultConnection") 
-                          ?? configuration["DATABASE_URL"]
-                          ?? Environment.GetEnvironmentVariable("DATABASE_URL");
+    var connStr1 = configuration.GetConnectionString("DefaultConnection");
+    var connStr2 = configuration["DATABASE_URL"];
+    var connStr3 = Environment.GetEnvironmentVariable("DATABASE_URL");
+    
+    Console.WriteLine($"[DbContext] ConnectionStrings:DefaultConnection = {(string.IsNullOrEmpty(connStr1) ? "NULL/EMPTY" : $"SET (length: {connStr1.Length})")}");
+    Console.WriteLine($"[DbContext] Configuration[DATABASE_URL] = {(string.IsNullOrEmpty(connStr2) ? "NULL/EMPTY" : $"SET (length: {connStr2.Length})")}");
+    Console.WriteLine($"[DbContext] Environment.GetEnvironmentVariable(DATABASE_URL) = {(string.IsNullOrEmpty(connStr3) ? "NULL/EMPTY" : $"SET (length: {connStr3.Length})")}");
+    
+    var connectionString = connStr1 ?? connStr2 ?? connStr3;
     
     if (string.IsNullOrEmpty(connectionString))
     {
-        Console.WriteLine("[DbContext] WARNING: No database connection string found!");
+        Console.WriteLine("[DbContext] ERROR: No database connection string found!");
         connectionString = "Host=localhost;Database=olubanise;Username=postgres;Password=password";
     }
     else
     {
-        Console.WriteLine($"[DbContext] Using connection string (length: {connectionString.Length})");
+        Console.WriteLine($"[DbContext] SUCCESS: Using connection string (length: {connectionString.Length}, preview: {connectionString.Substring(0, Math.Min(20, connectionString.Length))}...)");
     }
     
     options.UseNpgsql(connectionString);
 });
+
+Console.WriteLine("=== DATABASE CONFIGURED ===");
 
 // Custom Services
 builder.Services.AddScoped<IEncryptionService, EncryptionService>();
