@@ -8,19 +8,26 @@ import {
   Shield,
   Plus,
   CheckCircle2,
-  FileText,
-  DollarSign,
-  Trash2
+  Trash2,
+  LogOut
 } from 'lucide-react';
 import axios from 'axios';
 import { SignalRService } from './services/SignalRService';
 
-const TEST_USER_ID = "00000000-0000-0000-0000-000000000000";
 const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5241") + "/api";
 
 type View = 'dashboard' | 'soul' | 'desktop' | 'wallet' | 'audit' | 'security';
 
 function App() {
+  const [user, setUser] = useState<{ id: string, email: string } | null>(() => {
+    const saved = localStorage.getItem('olu_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [authView, setAuthView] = useState<'login' | 'register'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [status, setStatus] = useState('disconnected');
   const [qr, setQr] = useState<string | null>(null);
@@ -41,10 +48,12 @@ function App() {
   const [newTrustedSource, setNewTrustedSource] = useState("");
 
   useEffect(() => {
+    if (!user) return;
+
     // Initial Data Fetch
     fetchInitialData();
 
-    const signalR = new SignalRService(TEST_USER_ID);
+    const signalR = new SignalRService(user.id);
 
     signalR.onStatusUpdate((data) => {
       setStatus(data.status);
@@ -57,32 +66,33 @@ function App() {
     });
 
     return () => signalR.disconnect();
-  }, []);
+  }, [user]);
 
   const fetchInitialData = async () => {
+    if (!user) return;
     try {
       // Fetch Wallet
-      const walletRes = await axios.get(`${API_BASE}/payments/${TEST_USER_ID}/wallet`);
+      const walletRes = await axios.get(`${API_BASE}/payments/${user.id}/wallet`);
       setBalance(walletRes.data.balance);
       setTransactions(walletRes.data.transactions);
 
       // Fetch Security Settings
-      const settingsRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/settings`);
+      const settingsRes = await axios.get(`${API_BASE}/security/${user.id}/settings`);
       setSecuritySettings(settingsRes.data);
 
       // Fetch Trusted Sources
-      const trustedRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/trusted`);
+      const trustedRes = await axios.get(`${API_BASE}/security/${user.id}/trusted`);
       setTrustedSources(trustedRes.data);
 
       // Fetch Audit Logs for Dashboard
-      const auditRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/audit`);
+      const auditRes = await axios.get(`${API_BASE}/security/${user.id}/audit`);
       setAuditLogs(auditRes.data);
 
       // Fetch Soul (System Prompt)
-      const soulRes = await axios.get(`${API_BASE}/sessions/${TEST_USER_ID}`);
-      // Since we don't have a direct GET soul endpoint yet, we infer from previous fetches or add one
-      // For now, assume it's part of the general settings or default
-      if (soulRes.data.systemPrompt) setSystemPrompt(soulRes.data.systemPrompt);
+      const soulRes = await axios.get(`${API_BASE}/sessions/${user.id}`);
+      if (soulRes.data && soulRes.data.systemPrompt) {
+        setSystemPrompt(soulRes.data.systemPrompt);
+      }
     } catch (e) {
       console.error("Error fetching initial data", e);
     }
@@ -90,6 +100,7 @@ function App() {
 
   // Fetch data on view change
   useEffect(() => {
+    if (!user) return;
     if (currentView === 'security' || currentView === 'dashboard') {
       fetchSecurityData();
     }
@@ -99,45 +110,74 @@ function App() {
     if (currentView === 'audit') {
       fetchSecurityData();
     }
-  }, [currentView]);
+  }, [currentView, user]);
 
   const fetchWalletData = async () => {
+    if (!user) return;
     try {
-      const res = await axios.get(`${API_BASE}/payments/${TEST_USER_ID}/wallet`);
+      const res = await axios.get(`${API_BASE}/payments/${user.id}/wallet`);
       setBalance(res.data.balance);
       setTransactions(res.data.transactions);
     } catch (e) { console.error(e); }
   };
 
   const fetchSecurityData = async () => {
+    if (!user) return;
     try {
-      const settingsRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/settings`);
+      const settingsRes = await axios.get(`${API_BASE}/security/${user.id}/settings`);
       setSecuritySettings(settingsRes.data);
 
-      const trustedRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/trusted`);
+      const trustedRes = await axios.get(`${API_BASE}/security/${user.id}/trusted`);
       setTrustedSources(trustedRes.data);
 
-      const auditRes = await axios.get(`${API_BASE}/security/${TEST_USER_ID}/audit`);
+      const auditRes = await axios.get(`${API_BASE}/security/${user.id}/audit`);
       setAuditLogs(auditRes.data);
     } catch (e) {
       console.error("Error fetching security data", e);
     }
   };
 
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const endpoint = authView === 'login' ? 'login' : 'register';
+      const res = await axios.post(`${API_BASE}/auth/${endpoint}`, {
+        email: authEmail,
+        password: authPassword
+      });
+      const userData = res.data;
+      localStorage.setItem('olu_user', JSON.stringify(userData));
+      setUser(userData);
+    } catch (err: any) {
+      alert(err.response?.data || "Authentication failed");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('olu_user');
+    setUser(null);
+    setQr(null);
+    setStatus('disconnected');
+  };
+
   const updateSettings = async (updates: any) => {
+    if (!user) return;
     const newSettings = { ...securitySettings, ...updates };
     setSecuritySettings(newSettings);
     try {
-      await axios.post(`${API_BASE}/security/${TEST_USER_ID}/settings`, newSettings);
+      await axios.post(`${API_BASE}/security/${user.id}/settings`, newSettings);
     } catch (e) {
       console.error("Error saving settings", e);
     }
   };
 
   const addTrustedSource = async () => {
-    if (!newTrustedSource) return;
+    if (!user || !newTrustedSource) return;
     try {
-      const res = await axios.post(`${API_BASE}/security/${TEST_USER_ID}/trusted`, {
+      const res = await axios.post(`${API_BASE}/security/${user.id}/trusted`, {
         phoneNumber: newTrustedSource,
         platform: 'WhatsApp'
       });
@@ -149,8 +189,9 @@ function App() {
   };
 
   const removeTrustedSource = async (id: string) => {
+    if (!user) return;
     try {
-      await axios.delete(`${API_BASE}/security/${TEST_USER_ID}/trusted/${id}`);
+      await axios.delete(`${API_BASE}/security/${user.id}/trusted/${id}`);
       setTrustedSources(trustedSources.filter(s => s.id !== id));
     } catch (e) {
       console.error("Error removing trusted source", e);
@@ -158,8 +199,9 @@ function App() {
   };
 
   const updateSoul = async (newPrompt: string) => {
+    if (!user) return;
     try {
-      await axios.post(`${API_BASE}/sessions/${TEST_USER_ID}/soul`, {
+      await axios.post(`${API_BASE}/sessions/${user.id}/soul`, {
         systemPrompt: newPrompt
       });
       setSystemPrompt(newPrompt);
@@ -168,6 +210,63 @@ function App() {
       console.error(err);
     }
   };
+
+  if (!user) {
+    return (
+      <div className="auth-container">
+        <div className="auth-background">
+          <div className="auth-blob" style={{ top: '-10%', left: '-10%' }}></div>
+          <div className="auth-blob" style={{ bottom: '-10%', right: '-10%', animationDelay: '-5s' }}></div>
+        </div>
+        <div className="auth-card">
+          <div className="auth-logo">
+            <div className="logo-box">
+              <LayoutDashboard size={28} color="white" />
+            </div>
+            <h1 style={{ fontSize: 24, fontWeight: 900 }}>Olubanise</h1>
+          </div>
+          <div className="auth-title">
+            <h2>{authView === 'login' ? 'Welcome Back' : 'Get Started'}</h2>
+            <p>{authView === 'login' ? 'Sign in to manage your AI agent.' : 'Create an account to start your journey.'}</p>
+          </div>
+          <form className="auth-form" onSubmit={handleAuth}>
+            <div className="input-group">
+              <label className="input-label">Email Address</label>
+              <input
+                type="email"
+                className="text-input"
+                placeholder="name@example.com"
+                required
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+              />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Password</label>
+              <input
+                type="password"
+                className="text-input"
+                placeholder="••••••••"
+                required
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+              />
+            </div>
+            <button className="primary-btn" type="submit" disabled={isLoading}>
+              {isLoading ? 'Processing...' : (authView === 'login' ? 'Sign In' : 'Create Account')}
+            </button>
+          </form>
+          <div className="auth-footer">
+            {authView === 'login' ? (
+              <>Don't have an account? <span className="auth-link" onClick={() => setAuthView('register')}>Sign up</span></>
+            ) : (
+              <>Already have an account? <span className="auth-link" onClick={() => setAuthView('login')}>Sign in</span></>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const renderContent = () => {
     switch (currentView) {
@@ -197,7 +296,7 @@ function App() {
                   {qr ? (
                     <img src={`data:image/png;base64,${qr}`} alt="QR Code" style={{ width: '100%', borderRadius: 8 }} />
                   ) : (
-                    <div className="qr-placeholder" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e293b', color: '#64748b', fontSize: '0.8rem' }}>
+                    <div className="qr-placeholder" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e293b', color: '#64748b', fontSize: '0.8rem', width: '100%', height: '100%' }}>
                       {status === 'connected' ? 'Connected ✅' : 'Waiting for QR...'}
                     </div>
                   )}
@@ -415,7 +514,7 @@ function App() {
               </p>
               <div className="pairing-code-box">
                 <div className="card-title">Your Pairing Code</div>
-                <div className="pairing-code">OLU-{TEST_USER_ID.substring(0, 4).toUpperCase()}</div>
+                <div className="pairing-code">OLU-{user.id.substring(0, 4).toUpperCase()}</div>
               </div>
               <p className="last-sync">Enter this code into the Olubanise Desktop App.</p>
             </div>
@@ -518,12 +617,17 @@ function App() {
           <NavItem icon={<Wallet size={20} />} label="Wallet" active={currentView === 'wallet'} onClick={() => setCurrentView('wallet')} />
           <NavItem icon={<History size={20} />} label="Audit Logs" active={currentView === 'audit'} onClick={() => setCurrentView('audit')} />
         </nav>
-        <div className="sidebar-footer">
-          <div className="user-avatar"></div>
-          <div className="user-info">
-            <div className="name">Demo User</div>
-            <div className="role">Account Owner</div>
+        <div className="sidebar-footer" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="user-avatar" style={{ background: 'linear-gradient(45deg, #818cf8, #f472b6)' }}></div>
+            <div className="user-info">
+              <div className="name">{user.email.split('@')[0]}</div>
+              <div className="role">Member</div>
+            </div>
           </div>
+          <button className="logout-btn" onClick={handleLogout} style={{ width: '100%' }}>
+            <LogOut size={14} /> Sign Out
+          </button>
         </div>
       </aside>
 

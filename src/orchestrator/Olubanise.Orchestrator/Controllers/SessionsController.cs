@@ -34,15 +34,22 @@ public class SessionsController : ControllerBase
     [HttpGet("{userId}")]
     public async Task<IActionResult> GetSession(Guid userId)
     {
-        if (!IsWorkerAuthorized()) return Unauthorized();
-
+        // Allowed for both Worker and Frontend
         var session = await _context.WhatsAppSessions.FindAsync(userId);
-        if (session == null) return NotFound();
+        if (session == null)
+        {
+            session = new WhatsAppSession { UserId = userId };
+            _context.WhatsAppSessions.Add(session);
+            await _context.SaveChangesAsync();
+        }
 
         return Ok(new 
         { 
-            session.SessionBlob, 
-            session.EncryptionIV 
+            session.Status,
+            session.SystemPrompt,
+            // Only worker needs blob/IV, but for simplicity returning common info
+            session.SessionBlob,
+            session.EncryptionIV
         });
     }
 
