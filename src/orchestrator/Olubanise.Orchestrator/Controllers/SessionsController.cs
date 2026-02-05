@@ -117,40 +117,67 @@ public class SessionsController : ControllerBase
     [HttpPost("{userId}/status")]
     public async Task<IActionResult> UpdateStatus(Guid userId, [FromBody] StatusUpdateRequest request)
     {
-        if (!IsWorkerAuthorized()) return Unauthorized();
-
-        var session = await _context.WhatsAppSessions.FindAsync(userId);
-        if (session == null)
-        {
-            // Create session if it doesn't exist
-            session = new WhatsAppSession 
-            { 
-                UserId = userId,
-                Status = request.Status,
-                CreatedAt = DateTime.UtcNow,
-                LastSyncedAt = DateTime.UtcNow
-            };
-            _context.WhatsAppSessions.Add(session);
-        }
-        else
-        {
-            session.Status = request.Status;
-        }
-
-        await _context.SaveChangesAsync();
-
-        // Broadcast to SignalR (wrapped in try-catch to prevent 500 errors)
         try
         {
-            await _hubContext.Clients.Group(userId.ToString()).SendAsync("StatusUpdate", new { request.Status, request.Qr });
+            Console.WriteLine($"[UpdateStatus] Received request for userId: {userId}, status: {request.Status}");
+            
+            if (!IsWorkerAuthorized())
+            {
+                Console.WriteLine("[UpdateStatus] Authorization failed");
+                return Unauthorized();
+            }
+
+            Console.WriteLine("[UpdateStatus] Authorization successful");
+
+            var session = await _context.WhatsAppSessions.FindAsync(userId);
+            if (session == null)
+            {
+                Console.WriteLine($"[UpdateStatus] Creating new session for {userId}");
+                // Create session if it doesn't exist
+                session = new WhatsAppSession 
+                { 
+                    UserId = userId,
+                    Status = request.Status,
+                    CreatedAt = DateTime.UtcNow,
+                    LastSyncedAt = DateTime.UtcNow
+                };
+                _context.WhatsAppSessions.Add(session);
+            }
+            else
+            {
+                Console.WriteLine($"[UpdateStatus] Updating existing session for {userId}");
+                session.Status = request.Status;
+            }
+
+            Console.WriteLine("[UpdateStatus] Saving to database...");
+            await _context.SaveChangesAsync();
+            Console.WriteLine("[UpdateStatus] Database save successful");
+
+            // Broadcast to SignalR (wrapped in try-catch to prevent 500 errors)
+            try
+            {
+                await _hubContext.Clients.Group(userId.ToString()).SendAsync("StatusUpdate", new { request.Status, request.Qr });
+                Console.WriteLine("[UpdateStatus] SignalR broadcast successful");
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail the request
+                Console.WriteLine($"[UpdateStatus] SignalR broadcast failed: {ex.Message}");
+            }
+
+            Console.WriteLine("[UpdateStatus] Request completed successfully");
+            return Ok();
         }
         catch (Exception ex)
         {
-            // Log but don't fail the request
-            Console.WriteLine($"SignalR broadcast failed: {ex.Message}");
+            Console.WriteLine($"[UpdateStatus] FATAL ERROR: {ex.GetType().Name}: {ex.Message}");
+            Console.WriteLine($"[UpdateStatus] Stack trace: {ex.StackTrace}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"[UpdateStatus] Inner exception: {ex.InnerException.Message}");
+            }
+            return StatusCode(500, new { error = ex.Message, type = ex.GetType().Name });
         }
-
-        return Ok();
     }
 
     [HttpPost("{userId}/soul")]
