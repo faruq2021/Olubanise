@@ -13,7 +13,7 @@ services:
       - key: ANTHROPIC__APIKEY
         sync: false
       - key: WORKER__SHAREDSECRET
-        generateValue: true
+        value: OlubaniseInternalSecureKey_2026
       - key: ASPNETCORE_URLS
         value: http://+:8080
       - key: ANTHROPIC__BYPASSBILLING
