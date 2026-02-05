@@ -24,11 +24,43 @@ public class SessionsController : ControllerBase
     [HttpGet("health")]
     public IActionResult Health() => Ok(new { status = "healthy" });
 
+    [HttpGet("debug/config")]
+    public IActionResult DebugConfig()
+    {
+        var workerSecret = _configuration["Worker:SharedSecret"];
+        var hasSecret = !string.IsNullOrEmpty(workerSecret);
+        return Ok(new { 
+            hasWorkerSecret = hasSecret,
+            secretLength = workerSecret?.Length ?? 0,
+            // Don't expose the actual secret, just first/last chars for verification
+            secretPreview = hasSecret ? $"{workerSecret[0]}...{workerSecret[^1]}" : "NOT_SET"
+        });
+    }
+
     private bool IsWorkerAuthorized()
     {
         var apiKeyHeader = Request.Headers["X-Worker-Secret"].ToString();
         var workerSecret = _configuration["Worker:SharedSecret"];
-        return !string.IsNullOrEmpty(apiKeyHeader) && apiKeyHeader == workerSecret;
+        
+        // Debug logging
+        Console.WriteLine($"[Auth Check] Header present: {!string.IsNullOrEmpty(apiKeyHeader)}, Config present: {!string.IsNullOrEmpty(workerSecret)}");
+        
+        if (string.IsNullOrEmpty(workerSecret))
+        {
+            Console.WriteLine("[Auth Check] WARNING: Worker:SharedSecret not configured!");
+            return false;
+        }
+        
+        if (string.IsNullOrEmpty(apiKeyHeader))
+        {
+            Console.WriteLine("[Auth Check] WARNING: X-Worker-Secret header missing!");
+            return false;
+        }
+        
+        var isMatch = apiKeyHeader == workerSecret;
+        Console.WriteLine($"[Auth Check] Secrets match: {isMatch}");
+        
+        return isMatch;
     }
 
     [HttpGet("{userId}")]
