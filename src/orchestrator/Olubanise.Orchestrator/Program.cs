@@ -15,24 +15,27 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Database Context - Support both explicit connection string and Render's DATABASE_URL
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-                      ?? builder.Configuration["DATABASE_URL"]
-                      ?? Environment.GetEnvironmentVariable("DATABASE_URL");
-
-if (string.IsNullOrEmpty(connectionString))
+// Use a factory to ensure connection string is retrieved fresh each time
+builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
 {
-    Console.WriteLine("WARNING: No database connection string found!");
-    Console.WriteLine("Checked: ConnectionStrings:DefaultConnection, DATABASE_URL environment variable");
-    // Use a dummy connection string to prevent startup crash - will fail on first DB access
-    connectionString = "Host=localhost;Database=olubanise;Username=postgres;Password=password";
-}
-else
-{
-    Console.WriteLine($"Database connection string found (length: {connectionString.Length})");
-}
-
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+    
+    var connectionString = configuration.GetConnectionString("DefaultConnection") 
+                          ?? configuration["DATABASE_URL"]
+                          ?? Environment.GetEnvironmentVariable("DATABASE_URL");
+    
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        Console.WriteLine("[DbContext] WARNING: No database connection string found!");
+        connectionString = "Host=localhost;Database=olubanise;Username=postgres;Password=password";
+    }
+    else
+    {
+        Console.WriteLine($"[DbContext] Using connection string (length: {connectionString.Length})");
+    }
+    
+    options.UseNpgsql(connectionString);
+});
 
 // Custom Services
 builder.Services.AddScoped<IEncryptionService, EncryptionService>();
