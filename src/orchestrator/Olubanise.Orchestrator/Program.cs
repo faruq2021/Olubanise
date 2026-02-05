@@ -28,13 +28,15 @@ builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =
     var connStr2 = configuration["DATABASE_URL"];
     var connStr3 = Environment.GetEnvironmentVariable("DATABASE_URL");
     
-    Console.WriteLine($"[DbContext] ConnectionStrings:DefaultConnection = {(string.IsNullOrEmpty(connStr1) ? "NULL/EMPTY" : $"SET (length: {connStr1.Length})")}");
-    Console.WriteLine($"[DbContext] Configuration[DATABASE_URL] = {(string.IsNullOrEmpty(connStr2) ? "NULL/EMPTY" : $"SET (length: {connStr2.Length})")}");
-    Console.WriteLine($"[DbContext] Environment.GetEnvironmentVariable(DATABASE_URL) = {(string.IsNullOrEmpty(connStr3) ? "NULL/EMPTY" : $"SET (length: {connStr3.Length})")}");
+    Console.WriteLine($"[DbContext] ConnectionStrings:DefaultConnection = {(string.IsNullOrWhiteSpace(connStr1) ? "NULL/EMPTY" : $"SET (length: {connStr1.Length})")}");
+    Console.WriteLine($"[DbContext] Configuration[DATABASE_URL] = {(string.IsNullOrWhiteSpace(connStr2) ? "NULL/EMPTY" : $"SET (length: {connStr2.Length}, value: {connStr2})")}");
+    Console.WriteLine($"[DbContext] Environment.GetEnvironmentVariable(DATABASE_URL) = {(string.IsNullOrWhiteSpace(connStr3) ? "NULL/EMPTY" : $"SET (length: {connStr3.Length})")}");
     
-    var connectionString = connStr1 ?? connStr2 ?? connStr3;
+    var connectionString = string.IsNullOrWhiteSpace(connStr1) ? null : connStr1;
+    connectionString ??= string.IsNullOrWhiteSpace(connStr2) ? null : connStr2;
+    connectionString ??= string.IsNullOrWhiteSpace(connStr3) ? null : connStr3;
     
-    if (string.IsNullOrEmpty(connectionString))
+    if (string.IsNullOrWhiteSpace(connectionString))
     {
         Console.WriteLine("[DbContext] ERROR: No database connection string found!");
         connectionString = "Host=localhost;Database=olubanise;Username=postgres;Password=password";
