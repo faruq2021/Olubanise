@@ -127,9 +127,9 @@ public class SecurityAuditLog
     [Key]
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid UserId { get; set; }
-    public string Action { get; set; } // "File Delete", "Format"
-    public string Resource { get; set; } // "report.docx"
-    public string Status { get; set; } // "Allowed", "Blocked", "Pending"
-    public string Reason { get; set; } // "Destructive command blocked"
+    public required string Action { get; set; } // "File Delete", "Format"
+    public required string Resource { get; set; } // "report.docx"
+    public required string Status { get; set; } // "Allowed", "Blocked", "Pending"
+    public required string Reason { get; set; } // "Destructive command blocked"
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }

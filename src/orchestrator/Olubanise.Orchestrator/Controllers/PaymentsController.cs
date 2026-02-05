@@ -45,7 +45,7 @@ public class PaymentsController : ControllerBase
 
         var transactions = await _context.TransactionLogs
             .Where(t => t.UserId == userId)
-            .OrderByDescending(t => t.Timestamp)
+            .OrderByDescending(t => t.CreatedAt)
             .Take(10)
             .ToListAsync();
 
